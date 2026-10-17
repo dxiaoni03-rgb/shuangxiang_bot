@@ -7,7 +7,6 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    # Increase timeout so the bot can run for a longer session (minutes)
     timeout-minutes: 360
     steps:
       - name: Checkout repository

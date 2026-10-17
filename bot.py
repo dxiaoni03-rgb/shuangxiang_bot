@@ -1,6 +1,5 @@
 import logging
 import os
-import time
 from telegram import Update
 from telegram.error import TelegramError
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
@@ -21,7 +20,7 @@ if not OWNER_ID_RAW.isdigit():
     raise RuntimeError("Missing/invalid OWNER_ID secret (numeric Telegram user ID required)")
 OWNER_ID = int(OWNER_ID_RAW)
 
-# Mapping forwarded message_id (in the owner's chat) -> original user id
+# Mapping forwarded message_id (in the owner's chat) -> original user id.
 FORWARD_MAP: dict[int, int] = {}
 
 
@@ -33,7 +32,6 @@ def get_forwarded_user_id(message) -> int | None:
     sender_user = getattr(origin, "sender_user", None)
     if sender_user is not None:
         return sender_user.id
-    # If the original user hid their identity, Telegram does not expose their ID.
     return None
 
 
@@ -64,14 +62,19 @@ async def handle_owner_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     reply_to = message.reply_to_message
-    # First try to find mapping saved when we forwarded the original user message.
     target_user_id = None
-    if reply_to.message_id is not None:
+    if getattr(reply_to, "message_id", None) is not None:
         target_user_id = FORWARD_MAP.get(reply_to.message_id)
-
-    # Fallback to Telegram-provided metadata if mapping isn't available.
     if not target_user_id:
         target_user_id = get_forwarded_user_id(reply_to)
+
+    log.info(
+        "Owner reply: owner_user_id=%s, reply_to_message_id=%s, resolved_target_user_id=%s, forward_map_size=%s",
+        update.effective_user.id if update.effective_user else None,
+        getattr(reply_to, "message_id", None),
+        target_user_id,
+        len(FORWARD_MAP),
+    )
 
     if not target_user_id:
         await message.reply_text(
@@ -85,12 +88,8 @@ async def handle_owner_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
             from_chat_id=message.chat_id,
             message_id=message.message_id,
         )
-        # Optionally clean up the mapping entry to free memory / avoid reuse.
-        try:
-            if reply_to.message_id in FORWARD_MAP:
-                del FORWARD_MAP[reply_to.message_id]
-        except Exception:
-            pass
+        if getattr(reply_to, "message_id", None) in FORWARD_MAP:
+            del FORWARD_MAP[reply_to.message_id]
         await message.reply_text("已发送给用户。")
     except TelegramError as exc:
         log.warning("Could not deliver admin reply to user %s: %s", target_user_id, exc)
@@ -105,17 +104,18 @@ async def handle_user_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if user.id == OWNER_ID:
         await handle_owner_reply(update, context)
         return
+
+    log.info("Received user message: user_id=%s, chat_id=%s, message_id=%s", user.id, message.chat_id, message.message_id)
+
     try:
-        # forward_message returns the Message object for the newly forwarded message in the
-        # owner's chat; use its message_id to map back to the original user id.
         forwarded = await context.bot.forward_message(
             chat_id=OWNER_ID,
             from_chat_id=message.chat_id,
             message_id=message.message_id,
         )
-        if forwarded and getattr(forwarded, "message_id", None) is not None:
+        if getattr(forwarded, "message_id", None) is not None:
             FORWARD_MAP[forwarded.message_id] = user.id
-        # A short acknowledgement only; don't disclose the admin's ID.
+            log.info("Saved mapping: forwarded_message_id=%s -> user_id=%s", forwarded.message_id, user.id)
         await message.reply_text("消息已转交管理员。")
     except TelegramError as exc:
         log.warning("Could not forward message from user %s: %s", user.id, exc)
