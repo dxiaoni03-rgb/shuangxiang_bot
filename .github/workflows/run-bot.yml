@@ -2,6 +2,7 @@ name: Run shuangxiang_bot
 
 on:
   workflow_dispatch:
+  push:
 
 jobs:
   run-bot:
