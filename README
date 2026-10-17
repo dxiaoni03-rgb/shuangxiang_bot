@@ -1,0 +1,26 @@
+# 双向 Telegram 机器人（GitHub Actions 手动运行版）
+
+这是一个基础双向私聊机器人：用户发给机器人的消息会转发给管理员；管理员直接回复转发消息，机器人会把回复复制给原用户。它不包含原版可能有的关键词自动回复、广播、按钮菜单等高级功能。
+
+## 文件
+
+- `bot.py`：机器人程序
+- `requirements.txt`：Python 依赖
+- `.github/workflows/bot.yml`：手动运行 Actions，默认运行 10 分钟
+
+## 部署
+
+1. 把本项目所有文件上传到 GitHub 仓库的 `main` 分支，覆盖旧的 `.github/workflows/bot.yml`。`bot.py` 和 `requirements.txt` 放在仓库根目录。
+2. 在 GitHub 仓库打开 **Settings → Secrets and variables → Actions → New repository secret**，新增：
+   - `BOT_TOKEN`：通过 Telegram 的 `@BotFather` 获取的机器人 Token。
+   - `OWNER_ID`：管理员自己的纯数字 Telegram 用户 ID，不是用户名。可以通过可信的 Telegram ID 查询机器人获得；不要填 `@username`。
+3. 在 Telegram 中先向你的机器人发送 `/start`，机器人需要由你主动启动过，之后才能向你发送消息。
+4. 打开仓库 **Actions → Run Shuangxiang Telegram Bot → Run workflow**，选择运行 10、5、3 或 1 分钟，再点 Run workflow。
+5. 在运行的这段时间内，用户可以向机器人发消息；你可以在机器人转发到管理员聊天的消息上直接点“回复”。
+
+## 重要限制
+
+- GitHub Actions 不是 24 小时主机；工作流结束后机器人就离线。必须在需要接收消息的时间段手动启动。
+- 这是无数据库的最小版本，避免 Actions 临时磁盘造成映射丢失。管理员回复需要 Telegram 的转发消息提供可识别的原发送者；如果用户隐藏了转发身份，机器人无法知道回复应该发给谁。
+- 公开仓库的日志可能被更多人查看；不要把 Token 写入代码、README 或提交记录。只使用 GitHub Secrets。
+- 初次部署后请先手动测试 `/start`、用户发消息、管理员回复消息这三个流程。
